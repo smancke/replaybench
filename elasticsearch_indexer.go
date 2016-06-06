@@ -40,21 +40,6 @@ func (ei *ElasticsearchIndexer) Process(l *LogEntry) error {
 	return nil
 }
 
-func (ei *ElasticsearchIndexer) Finish() chan bool {
-	done := make(chan bool)
-	go func() {
-		for len(ei.fanout) > 0 {
-			time.Sleep(10 * time.Millisecond)
-		}
-		close(ei.shouldFinishC) // close does a broadcast
-		for _, c := range ei.workerDone {
-			<-c
-		}
-		done <- true
-	}()
-	return done
-}
-
 func (ei *ElasticsearchIndexer) startWorker(shouldFinishC, done chan bool) {
 	shouldFinish := false
 	for {
@@ -106,4 +91,19 @@ func (ei *ElasticsearchIndexer) startWorker(shouldFinishC, done chan bool) {
 			return
 		}
 	}
+}
+
+func (ei *ElasticsearchIndexer) Finish() chan bool {
+	done := make(chan bool)
+	go func() {
+		for len(ei.fanout) > 0 {
+			time.Sleep(10 * time.Millisecond)
+		}
+		close(ei.shouldFinishC) // close does a broadcast
+		for _, c := range ei.workerDone {
+			<-c
+		}
+		done <- true
+	}()
+	return done
 }

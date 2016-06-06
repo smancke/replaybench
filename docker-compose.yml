@@ -8,7 +8,7 @@ services:
     ports:
       - 9200:9200
     volumes:
-      - "/opt/replaybench/data:/opt/replaybench/data"
+      - "/opt/replaybench/data:/usr/share/elasticsearch/data"
 
   kibana:
     image: kibana:4.5.0

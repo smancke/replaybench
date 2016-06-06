@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -39,14 +40,19 @@ type LogEntry struct {
 	Verb         string
 	Request      string
 	Httpversion  string
-	Response     string
+	Response     int
 	Bytes        string
 	Referrer     string
 	Agent        string
 	ContentType  string
 	Path         string
 	Timestamp    time.Time `json:"@timestamp"`
-	//Timestamp    int64 `json:"@timestamp"`
+	Replay       struct {
+		DurationMs   int
+		Error        bool
+		ErrorMessage string
+		Offset       time.Duration
+	}
 }
 
 type Processor interface {
@@ -84,8 +90,11 @@ func main() {
 		panic(err)
 	}
 
+	indexer := NewElasticsearchIndexer("http://127.0.0.1:9200")
 	processors := CompoundProcessor{
-		NewElasticsearchIndexer("http://127.0.0.1:9200"),
+		NewReplayProcessor("http://127.0.0.1:80", indexer),
+		indexer,
+		//NewElasticsearchIndexer("http://127.0.0.1:9200"),
 		//NewCountProcessor(),
 	}
 
@@ -130,16 +139,15 @@ func main() {
 	fmt.Fprintf(os.Stderr, "Ignored: %v\n", ignoreCount)
 	fmt.Fprintf(os.Stderr, "Errors: %v\n", errorCount)
 
-	if err := processors.Finish(time.Second * 10); err != nil {
+	if err := processors.Finish(time.Second * 100); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err.Error())
 	} else {
 		fmt.Fprintf(os.Stderr, "done.\n")
 	}
-
 }
 
 func read(reader io.Reader, processor Processor) (count, ignoreCount, errorCount int) {
-
+	offset := time.Duration(0)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		if count+ignoreCount+errorCount >= args.Limit {
@@ -163,6 +171,15 @@ func read(reader io.Reader, processor Processor) (count, ignoreCount, errorCount
 			errorCount++
 			continue
 		}
+
+		if offset == time.Duration(0) {
+			offset = time.Since(l.Timestamp)
+		}
+		// don't be fastster than the log
+		for time.Since(l.Timestamp) < offset {
+			time.Sleep(time.Millisecond * 100)
+		}
+
 		if l.ContentType == "ignore" {
 			ignoreCount++
 			continue
@@ -204,7 +221,7 @@ func parseEntry(line string) (*LogEntry, error) {
 		Verb:         getFirst(c, "verb"),
 		Request:      getFirst(c, "request"),
 		Httpversion:  getFirst(c, "httpversion"),
-		Response:     getFirst(c, "response"),
+		Response:     getFirstInt(c, "response"),
 		Bytes:        getFirst(c, "bytes"),
 		Referrer:     getFirst(c, "referrer"),
 		Agent:        getFirst(c, "agent"),
@@ -216,7 +233,7 @@ func calculateFields(l *LogEntry) error {
 	parts := strings.SplitN(l.Request, "?", 2)
 	l.Path = parts[0]
 
-	if RegexIgnore.MatchString(l.Request) {
+	if RegexIgnore.MatchString(l.Request) || l.Response != 200 {
 		l.ContentType = "ignore"
 	} else if RegexAssets.MatchString(l.Request) {
 		l.ContentType = "asset"
@@ -243,4 +260,14 @@ func getFirst(captures map[string][]string, key string) string {
 		}
 	}
 	return ""
+}
+
+func getFirstInt(captures map[string][]string, key string) int {
+	for k, v := range captures {
+		if strings.HasSuffix(k, ":"+key) && len(v) > 0 {
+			i, _ := strconv.Atoi(v[0])
+			return i
+		}
+	}
+	return 0
 }
