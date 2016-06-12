@@ -11,6 +11,8 @@ import (
 
 type UserSimulation struct {
 	baseURL      string
+	username     string
+	password     string
 	fanout       chan *LogEntry
 	mux          *sync.Mutex
 	shouldFinish chan bool
@@ -19,10 +21,14 @@ type UserSimulation struct {
 	lastAction   time.Time
 }
 
-func newUserSimulation(baseURL string, log Processor) *UserSimulation {
+var redirectError = errors.New("redirect")
+
+func newUserSimulation(baseURL string, log Processor, username, password string) *UserSimulation {
 	us := &UserSimulation{
 		baseURL:      baseURL,
-		fanout:       make(chan *LogEntry, 100),
+		username:     username,
+		password:     password,
+		fanout:       make(chan *LogEntry, 10),
 		mux:          &sync.Mutex{},
 		shouldFinish: make(chan bool),
 		workerDone:   make([]chan bool, 6),
@@ -55,15 +61,16 @@ func (us *UserSimulation) doCall(client *http.Client, l *LogEntry) {
 	l.Timestamp = time.Now()
 	url := us.baseURL + l.Request
 	request, err := http.NewRequest("GET", url, nil)
-	request.SetBasicAuth("user", "pwd")
+	if us.username != "" {
+		request.SetBasicAuth(us.username, us.password)
+	}
 	if err != nil {
 		l.Replay.Error = true
 		l.Replay.ErrorMessage = err.Error()
 		return
 	}
-	//fmt.Printf("start call %v: \n\n", l)
 	resp, err := client.Do(request)
-	if err != nil {
+	if err != nil && !(err == redirectError && (l.Response == 301 || l.Response == 302)) {
 		l.Replay.Error = true
 		l.Replay.ErrorMessage = err.Error()
 		return
@@ -73,7 +80,6 @@ func (us *UserSimulation) doCall(client *http.Client, l *LogEntry) {
 	defer us.UpdateLastAction()
 
 	l.Replay.ErrorMessage = fmt.Sprintf("%v", resp.StatusCode)
-
 	l.Replay.DurationMs = int(time.Since(l.Timestamp).Nanoseconds() / 1000000)
 
 	if resp.StatusCode != l.Response {
@@ -81,13 +87,12 @@ func (us *UserSimulation) doCall(client *http.Client, l *LogEntry) {
 		l.Replay.ErrorMessage = fmt.Sprintf("Wrong status returned: %v (expected: %v)", resp.StatusCode, l.Response)
 		return
 	}
-	//fmt.Printf("done call %v: \n\n", l)
 }
 
 func (us *UserSimulation) startWorker(shouldFinishC, done chan bool) {
 	client := &http.Client{Timeout: time.Second * 10}
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return errors.New("redirect")
+		return redirectError
 	}
 loop:
 	for {

@@ -28,6 +28,10 @@ type Args struct {
 	RegexAssets string   `arg:"--regex-asset,help: Pattern for lines of type asset (matched against the request)"`
 	RegexAjax   string   `arg:"--regex-ajax,help: Pattern for lines of type ajax (matched against the request)"`
 	RegexSearch string   `arg:"--regex-search,help: Pattern for lines of type search (matched against the request)"`
+	BaseUrl     string   `arg:"--base-url,help: The base url to call"`
+	Username    string   `arg:"--username,help: Http Basic Auth Username"`
+	Password    string   `arg:"--password,help: Http Basic Auth Password"`
+	EsURL       string   `arg:"--es-url,help: The url of elasticsearch"`
 }
 
 type LogEntry struct {
@@ -73,6 +77,10 @@ func main() {
 		RegexAssets: `\.jpg|\.jpeg|\.png|\.ico|\.css|\.js|\.svg|\.gif|\.pdf`,
 		RegexAjax:   `jsonp_callback|\.json`,
 		RegexSearch: `\?q=|\&q=`,
+		BaseUrl:     "http://127.0.0.1",
+		Username:    "",
+		Password:    "",
+		EsURL:       "http://127.0.0.1:9200",
 	}
 	arg.MustParse(args)
 
@@ -90,12 +98,10 @@ func main() {
 		panic(err)
 	}
 
-	indexer := NewElasticsearchIndexer("http://127.0.0.1:9200")
+	indexer := NewElasticsearchIndexer(args.EsURL)
 	processors := CompoundProcessor{
-		NewReplayProcessor("http://127.0.0.1:80", indexer),
+		NewReplayProcessor(args.BaseUrl, indexer, args.Username, args.Password),
 		indexer,
-		//NewElasticsearchIndexer("http://127.0.0.1:9200"),
-		//NewCountProcessor(),
 	}
 
 	count, ignoreCount, errorCount := 0, 0, 0

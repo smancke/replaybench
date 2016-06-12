@@ -9,6 +9,8 @@ import (
 
 type ReplayProcessor struct {
 	baseURL        string
+	username       string
+	password       string
 	fanout         chan *LogEntry
 	userSimulation map[string]*UserSimulation
 	mux            *sync.Mutex
@@ -17,9 +19,11 @@ type ReplayProcessor struct {
 	log            Processor
 }
 
-func NewReplayProcessor(baseURL string, log Processor) *ReplayProcessor {
+func NewReplayProcessor(baseURL string, log Processor, username, password string) *ReplayProcessor {
 	rp := &ReplayProcessor{
 		baseURL:        baseURL,
+		username:       username,
+		password:       password,
 		fanout:         make(chan *LogEntry, 100),
 		userSimulation: make(map[string]*UserSimulation),
 		mux:            &sync.Mutex{},
@@ -60,7 +64,7 @@ func (rp *ReplayProcessor) getUserSimulation(clientIp string) *UserSimulation {
 	us, exist := rp.userSimulation[clientIp]
 	if !exist {
 		fmt.Fprintf(os.Stderr, "started user simulation %v\n", clientIp)
-		us = newUserSimulation(rp.baseURL, rp.log)
+		us = newUserSimulation(rp.baseURL, rp.log, rp.username, rp.password)
 		rp.userSimulation[clientIp] = us
 		// cleanup old
 		for k, v := range rp.userSimulation {
