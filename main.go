@@ -59,6 +59,8 @@ type LogEntry struct {
 	}
 }
 
+var urlHostRegexp = regexp.MustCompile(`http(s?):\/\/[.:a-zA-Z0-9-]*`)
+
 type Processor interface {
 	Process(l *LogEntry) error
 }
@@ -74,7 +76,7 @@ func main() {
 		PatternFile: "./patterns",
 		PatternName: "LOG",
 		RegexIgnore: `healthcheck`,
-		RegexAssets: `\.jpg|\.jpeg|\.png|\.ico|\.css|\.js|\.svg|\.gif|\.pdf`,
+		RegexAssets: `\.jpg|\.jpeg|\.png|\.ico|\.css|\.js|\.svg|\.gif|\.pdf|.xml|.woff|.eot`,
 		RegexAjax:   `jsonp_callback|\.json`,
 		RegexSearch: `\?q=|\&q=`,
 		BaseUrl:     "http://127.0.0.1",
@@ -236,6 +238,7 @@ func parseEntry(line string) (*LogEntry, error) {
 }
 
 func calculateFields(l *LogEntry) error {
+	l.Request = urlHostRegexp.ReplaceAllString(l.Request, "")
 	parts := strings.SplitN(l.Request, "?", 2)
 	l.Path = parts[0]
 
@@ -251,10 +254,14 @@ func calculateFields(l *LogEntry) error {
 		l.ContentType = "page"
 	}
 
-	if time, err := time.Parse("02/Jan/2006:15:04:05 -0700", l.Time); err == nil {
-		l.Timestamp = time
+	if t, err := time.Parse("02/Jan/2006:15:04:05 -0700", l.Time); err == nil {
+		l.Timestamp = t
 	} else {
-		return err
+		if t, err = time.Parse("2006-01-02T15:04:05-0700", l.Time); err == nil {
+			l.Timestamp = t
+		} else {
+			return err
+		}
 	}
 	return nil
 }
