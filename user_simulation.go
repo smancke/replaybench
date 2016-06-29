@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"sync"
 	"time"
@@ -22,6 +23,10 @@ type UserSimulation struct {
 }
 
 var redirectError = errors.New("redirect")
+
+func init() {
+	rand.Seed(time.Now().UTC().UnixNano())
+}
 
 func newUserSimulation(baseURL string, log Processor, username, password string) *UserSimulation {
 	us := &UserSimulation{
@@ -59,8 +64,10 @@ func (us *UserSimulation) IsActive() bool {
 func (us *UserSimulation) doCall(client *http.Client, l *LogEntry) {
 	us.UpdateLastAction()
 	l.Timestamp = time.Now()
+	l.CorrelationId = "rep-" + randStringBytes(10)
 	url := us.baseURL + l.Request
 	request, err := http.NewRequest("GET", url, nil)
+	request.Header.Set("X-Correlation-Id", l.CorrelationId)
 	if us.username != "" {
 		request.SetBasicAuth(us.username, us.password)
 	}
@@ -130,4 +137,14 @@ func (us *UserSimulation) Finish() chan bool {
 		done <- true
 	}()
 	return done
+}
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func randStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
 }

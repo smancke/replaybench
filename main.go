@@ -35,23 +35,24 @@ type Args struct {
 }
 
 type LogEntry struct {
-	Host         string
-	Loadbalancer string
-	Clientip     string
-	Ident        string
-	Auth         string
-	Time         string
-	Verb         string
-	Request      string
-	Httpversion  string
-	Response     int
-	Bytes        string
-	Referrer     string
-	Agent        string
-	ContentType  string
-	Path         string
-	Timestamp    time.Time `json:"@timestamp"`
-	Replay       struct {
+	Host          string
+	Loadbalancer  string
+	Clientip      string
+	Ident         string
+	Auth          string
+	Time          string
+	Verb          string
+	Request       string
+	Httpversion   string
+	Response      int
+	Bytes         string
+	Referrer      string
+	Agent         string
+	ContentType   string
+	Path          string
+	CorrelationId string
+	Timestamp     time.Time `json:"@timestamp"`
+	Replay        struct {
 		DurationMs   int
 		Error        bool
 		ErrorMessage string
@@ -76,7 +77,7 @@ func main() {
 		PatternFile: "./patterns",
 		PatternName: "LOG",
 		RegexIgnore: `healthcheck`,
-		RegexAssets: `\.jpg|\.jpeg|\.png|\.ico|\.css|\.js|\.svg|\.gif|\.pdf|.xml|.woff|.eot`,
+		RegexAssets: `\.jpg|\.jpeg|\.png|\.ico|\.css|\.js|\.svg|\.gif|\.pdf|\.xml|\.woff|\.eot`,
 		RegexAjax:   `jsonp_callback|\.json`,
 		RegexSearch: `\?q=|\&q=`,
 		BaseUrl:     "http://127.0.0.1",
@@ -213,6 +214,7 @@ func read(reader io.Reader, processor Processor) (count, ignoreCount, errorCount
 }
 
 func parseEntry(line string) (*LogEntry, error) {
+
 	m := g.Match(line)
 	if m == nil {
 		return nil, errors.New("can not parse: " + line)
