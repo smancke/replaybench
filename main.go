@@ -3,10 +3,8 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
-	"errors"
 	"fmt"
 	"github.com/alexflint/go-arg"
-	"github.com/blakesmith/go-grok/grok"
 	"io"
 	"log"
 	"math"
@@ -22,8 +20,6 @@ type Args struct {
 	Verbose     bool     `arg:"-v,help: More verbose output"`
 	ShowErrors  bool     `arg:"--show-errors,help: Show errors"`
 	Limit       int      `arg:"--limit,help: Only process the first LIMIT lines"`
-	PatternFile string   `arg:"--pattern-file,help: The configuration file with grok patterns"`
-	PatternName string   `arg:"--pattern-name,help: The name of the pattern to parse the log lines"`
 	RegexIgnore string   `arg:"--regex-ignore,help: Pattern for lines to ignore (matched against the request)"`
 	RegexAssets string   `arg:"--regex-asset,help: Pattern for lines of type asset (matched against the request)"`
 	RegexAjax   string   `arg:"--regex-ajax,help: Pattern for lines of type ajax (matched against the request)"`
@@ -34,39 +30,12 @@ type Args struct {
 	EsURL       string   `arg:"--es-url,help: The url of elasticsearch"`
 }
 
-type LogEntry struct {
-	Host          string
-	Loadbalancer  string
-	Clientip      string
-	Ident         string
-	Auth          string
-	Time          string
-	Verb          string
-	Request       string
-	Httpversion   string
-	Response      int
-	Bytes         string
-	Referrer      string
-	Agent         string
-	ContentType   string
-	Path          string
-	CorrelationId string
-	Timestamp     time.Time `json:"@timestamp"`
-	Replay        struct {
-		DurationMs   int
-		Error        bool
-		ErrorMessage string
-		Offset       time.Duration
-	}
-}
-
 var urlHostRegexp = regexp.MustCompile(`http(s?):\/\/[.:a-zA-Z0-9-]*`)
 
 type Processor interface {
 	Process(l *LogEntry) error
 }
 
-var g *grok.Grok
 var args *Args
 var RegexIgnore, RegexAssets, RegexAjax, RegexSearch *regexp.Regexp
 
@@ -74,8 +43,6 @@ func main() {
 	args = &Args{
 		ShowErrors:  false,
 		Limit:       math.MaxInt32,
-		PatternFile: "./patterns",
-		PatternName: "LOG",
 		RegexIgnore: `healthcheck`,
 		RegexAssets: `\.jpg|\.jpeg|\.png|\.ico|\.css|\.js|\.svg|\.gif|\.pdf|\.xml|\.woff|\.eot`,
 		RegexAjax:   `jsonp_callback|\.json`,
@@ -91,15 +58,6 @@ func main() {
 	RegexAssets = regexp.MustCompile(args.RegexAssets)
 	RegexAjax = regexp.MustCompile(args.RegexAjax)
 	RegexSearch = regexp.MustCompile(args.RegexSearch)
-
-	g = grok.New()
-	defer g.Free()
-	if err := g.AddPatternsFromFile(args.PatternFile); err != nil {
-		panic(err)
-	}
-	if err := g.Compile("%{" + args.PatternName + "}"); err != nil {
-		panic(err)
-	}
 
 	indexer := NewElasticsearchIndexer(args.EsURL)
 	processors := CompoundProcessor{
@@ -156,6 +114,9 @@ func main() {
 }
 
 func read(reader io.Reader, processor Processor) (count, ignoreCount, errorCount int) {
+	parser := NewLogParser()
+	initialized := false
+
 	offset := time.Duration(0)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
@@ -164,7 +125,15 @@ func read(reader io.Reader, processor Processor) (count, ignoreCount, errorCount
 		}
 		line := scanner.Text()
 
-		l, err := parseEntry(line)
+		if !initialized {
+			err := parser.ConfigureByExample(line)
+			if err != nil {
+				panic(err)
+			}
+			initialized = true
+		}
+
+		l, err := parser.ParseEntry(line)
 		if err != nil {
 			if args.ShowErrors {
 				log.Println(err)
@@ -213,36 +182,8 @@ func read(reader io.Reader, processor Processor) (count, ignoreCount, errorCount
 	return count, ignoreCount, errorCount
 }
 
-func parseEntry(line string) (*LogEntry, error) {
-
-	m := g.Match(line)
-	if m == nil {
-		return nil, errors.New("can not parse: " + line)
-	}
-	c := m.Captures()
-
-	l := &LogEntry{
-		Host:         getFirst(c, "host"),
-		Loadbalancer: getFirst(c, "loadbalancer"),
-		Clientip:     getFirst(c, "clientip"),
-		Ident:        getFirst(c, "ident"),
-		Auth:         getFirst(c, "auth"),
-		Time:         getFirst(c, "time"),
-		Verb:         getFirst(c, "verb"),
-		Request:      getFirst(c, "request"),
-		Httpversion:  getFirst(c, "httpversion"),
-		Response:     getFirstInt(c, "response"),
-		Bytes:        getFirst(c, "bytes"),
-		Referrer:     getFirst(c, "referrer"),
-		Agent:        getFirst(c, "agent"),
-	}
-	return l, nil
-}
-
 func calculateFields(l *LogEntry) error {
 	l.Request = urlHostRegexp.ReplaceAllString(l.Request, "")
-	parts := strings.SplitN(l.Request, "?", 2)
-	l.Path = parts[0]
 
 	if RegexIgnore.MatchString(l.Request) || l.Response != 200 {
 		l.ContentType = "ignore"
@@ -256,15 +197,6 @@ func calculateFields(l *LogEntry) error {
 		l.ContentType = "page"
 	}
 
-	if t, err := time.Parse("02/Jan/2006:15:04:05 -0700", l.Time); err == nil {
-		l.Timestamp = t
-	} else {
-		if t, err = time.Parse("2006-01-02T15:04:05-0700", l.Time); err == nil {
-			l.Timestamp = t
-		} else {
-			return err
-		}
-	}
 	return nil
 }
 

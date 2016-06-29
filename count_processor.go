@@ -23,7 +23,7 @@ func (cp *CountProcessor) Process(l *LogEntry) error {
 	defer cp.mutex.Unlock()
 
 	if l.ContentType != "ignore" {
-		cp.counts[l.ContentType+" "+l.Verb+" "+l.Path]++
+		cp.counts[l.ContentType+" "+l.Verb+" "+l.Request]++
 	}
 	return nil
 }

@@ -4,12 +4,6 @@ Golang http benchmark and statistic tool replaying access log files.
 
 WORK in progress: Do not expect a ready solution, here!
 
-Build
----------
-Before compile, you have to install the grok build requirements, e.g.:
-```
-apt-get install libgrok1 libgrok-dev bison ctags flex gperf libevent-dev libpcre3-dev libtokyocabinet-dev
-```
 
 Features
 ---------
