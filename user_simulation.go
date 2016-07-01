@@ -63,8 +63,10 @@ func (us *UserSimulation) IsActive() bool {
 
 func (us *UserSimulation) doCall(client *http.Client, l *LogEntry) {
 	us.UpdateLastAction()
+
 	l.Timestamp = time.Now()
 	l.CorrelationId = "rep-" + randStringBytes(10)
+
 	url := us.baseURL + l.Request
 	request, err := http.NewRequest("GET", url, nil)
 	request.Header.Set("X-Correlation-Id", l.CorrelationId)
@@ -77,9 +79,9 @@ func (us *UserSimulation) doCall(client *http.Client, l *LogEntry) {
 		return
 	}
 	resp, err := client.Do(request)
-	if err != nil && !(err == redirectError && (l.Response == 301 || l.Response == 302)) {
+	if err != nil && !(err == redirectError && (l.Response == 301 || l.Response == 302 || l.Response == 303)) {
 		l.Replay.Error = true
-		l.Replay.ErrorMessage = err.Error()
+		l.Replay.ErrorMessage = fmt.Sprintf("expected %v, but got redirect: %e", err)
 		return
 	}
 	ioutil.ReadAll(resp.Body)
