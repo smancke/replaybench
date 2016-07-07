@@ -81,7 +81,7 @@ func (us *UserSimulation) doCall(client *http.Client, l *LogEntry) {
 	resp, err := client.Do(request)
 	if err != nil && !(err == redirectError && (l.Response == 301 || l.Response == 302 || l.Response == 303)) {
 		l.Replay.Error = true
-		l.Replay.ErrorMessage = fmt.Sprintf("expected %v, but got redirect: %e", err)
+		l.Replay.ErrorMessage = fmt.Sprintf("expected %v, but got redirect: %e", l.Response, err)
 		return
 	}
 	ioutil.ReadAll(resp.Body)
