@@ -36,6 +36,7 @@ func NewElasticsearchIndexer(baseurl string) *ElasticsearchIndexer {
 }
 
 func (ei *ElasticsearchIndexer) Process(l *LogEntry) error {
+	l.wg.Wait()
 	ei.fanout <- l
 	return nil
 }

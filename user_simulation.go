@@ -90,7 +90,6 @@ func (us *UserSimulation) doCall(client *http.Client, l *LogEntry) {
 
 	l.Replay.ErrorMessage = fmt.Sprintf("%v", resp.StatusCode)
 	l.Replay.DurationMs = int(time.Since(l.Timestamp).Nanoseconds() / 1000000)
-
 	if resp.StatusCode != l.Response {
 		l.Replay.Error = true
 		l.Replay.ErrorMessage = fmt.Sprintf("Wrong status returned: %v (expected: %v)", resp.StatusCode, l.Response)
@@ -110,9 +109,8 @@ loop:
 			if l.ContentType == "ignore" {
 				continue
 			}
-			lCopy := *l
-			us.doCall(client, &lCopy)
-			us.log.Process(&lCopy)
+			us.doCall(client, l)
+			l.wg.Done()
 		case <-shouldFinishC:
 			break loop
 		}
