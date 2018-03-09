@@ -7,10 +7,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 type LogEntry struct {
+	wg            sync.WaitGroup
 	Clientip      string
 	Verb          string
 	Request       string
@@ -38,6 +40,7 @@ var positionRegexp = map[string]string{
 var timePatterns = []string{
 	"02/Jan/2006:15:04:05 -0700",
 	"2006-01-02T15:04:05-0700",
+	"2006-01-02T15:04:05Z07:00",
 	"02/Jan/2006:15:04:05",
 }
 
@@ -79,7 +82,6 @@ func (parser *LogParser) ConfigureByExample(line string) error {
 
 func (parser *LogParser) ParseEntry(line string) (*LogEntry, error) {
 	fields := strings.Split(line, " ")
-
 	l := &LogEntry{}
 	for field, pos := range parser.positions {
 		if pos >= len(fields) {
@@ -104,7 +106,7 @@ func (parser *LogParser) ParseEntry(line string) (*LogEntry, error) {
 		case reflect.Struct:
 			if fieldV.Type() == reflect.TypeOf(time.Time{}) {
 				if t, err := time.Parse(parser.timePattern, value); err != nil {
-					return nil, fmt.Errorf("error parsing timestamp in %e: %err", line, err)
+					return nil, fmt.Errorf("error parsing timestamp in %v: %err", line, err)
 				} else {
 					fieldV.Set(reflect.ValueOf(t))
 				}

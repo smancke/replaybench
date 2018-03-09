@@ -32,6 +32,10 @@ func Test_getPosAndPatternForTime(t *testing.T) {
 	a.NoError(err)
 	a.Equal(1, i)
 
+	i, _, err = getPosAndPatternForTime([]string{"foo", "2018-02-22T08:27:14Z", "bar"})
+	a.NoError(err)
+	a.Equal(1, i)
+
 	i, _, err = getPosAndPatternForTime([]string{"foo", "29/May/2016:16:23:08 +0200", "bar"})
 	a.NoError(err)
 	a.Equal(1, i)

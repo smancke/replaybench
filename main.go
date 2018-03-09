@@ -166,6 +166,7 @@ func read(reader io.Reader, processor Processor) (count, ignoreCount, errorCount
 			fmt.Printf("\n%v\n%+v\n", line, l)
 		}
 		//fmt.Printf("%v %v %v\n", l.verb, l.ContentType, l.path)
+		l.wg.Add(1)
 		if err := processor.Process(l); err != nil {
 			panic(err)
 		}
