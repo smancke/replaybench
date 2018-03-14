@@ -52,6 +52,7 @@ func (ei *ElasticsearchIndexer) startWorker(shouldFinishC, done chan bool) {
 			select {
 			case l := <-ei.fanout:
 				if l.ContentType == "ignore" {
+					l.wg.Done()
 					continue
 				}
 

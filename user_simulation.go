@@ -49,6 +49,7 @@ func newUserSimulation(baseURL string, log Processor, username, password string)
 
 func (us *UserSimulation) Process(l *LogEntry) error {
 	if l.Verb != "GET" {
+		l.wg.Done()
 		return nil
 	}
 	us.fanout <- l
@@ -107,6 +108,7 @@ loop:
 		select {
 		case l := <-us.fanout:
 			if l.ContentType == "ignore" {
+				l.wg.Done()
 				continue
 			}
 			us.doCall(client, l)

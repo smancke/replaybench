@@ -46,6 +46,7 @@ loop:
 		select {
 		case l := <-rp.fanout:
 			if l.ContentType == "ignore" {
+				l.wg.Done()
 				continue
 			}
 			us := rp.getUserSimulation(l.Clientip)
